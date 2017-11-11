@@ -5,7 +5,6 @@ Layer construction for Context Layer/Multi-perspective matching Layer/Prediction
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.autograd import Variable
 
 
@@ -18,32 +17,32 @@ class MatchingLayer(nn.Module):
         self.perspective = perspective
         self.batch_size = batch_size
 
-        W1 = torch.Tensor(perspective, embed_dim)
-        W2 = torch.Tensor(perspective, embed_dim)
-        W3 = torch.Tensor(perspective, embed_dim)
-        W4 = torch.Tensor(perspective, embed_dim)
-        W5 = torch.Tensor(perspective, embed_dim)
-        W6 = torch.Tensor(perspective, embed_dim)
-        W7 = torch.Tensor(perspective, embed_dim)
-        W8 = torch.Tensor(perspective, embed_dim)
+        w1 = torch.Tensor(perspective, embed_dim)
+        w2 = torch.Tensor(perspective, embed_dim)
+        w3 = torch.Tensor(perspective, embed_dim)
+        w4 = torch.Tensor(perspective, embed_dim)
+        w5 = torch.Tensor(perspective, embed_dim)
+        w6 = torch.Tensor(perspective, embed_dim)
+        w7 = torch.Tensor(perspective, embed_dim)
+        w8 = torch.Tensor(perspective, embed_dim)
 
-        nn.init.uniform(W1, -0.01, 0.01)
-        nn.init.uniform(W2, -0.01, 0.01)
-        nn.init.uniform(W3, -0.01, 0.01)
-        nn.init.uniform(W4, -0.01, 0.01)
-        nn.init.uniform(W5, -0.01, 0.01)
-        nn.init.uniform(W6, -0.01, 0.01)
-        nn.init.uniform(W7, -0.01, 0.01)
-        nn.init.uniform(W8, -0.01, 0.01)
+        nn.init.uniform(w1, -0.01, 0.01)
+        nn.init.uniform(w2, -0.01, 0.01)
+        nn.init.uniform(w3, -0.01, 0.01)
+        nn.init.uniform(w4, -0.01, 0.01)
+        nn.init.uniform(w5, -0.01, 0.01)
+        nn.init.uniform(w6, -0.01, 0.01)
+        nn.init.uniform(w7, -0.01, 0.01)
+        nn.init.uniform(w8, -0.01, 0.01)
 
-        self.W1 = nn.Parameter(W1)
-        self.W2 = nn.Parameter(W2)
-        self.W3 = nn.Parameter(W3)
-        self.W4 = nn.Parameter(W4)
-        self.W5 = nn.Parameter(W5)
-        self.W6 = nn.Parameter(W6)
-        self.W7 = nn.Parameter(W7)
-        self.W8 = nn.Parameter(W8)
+        self.w1 = nn.Parameter(w1)
+        self.w2 = nn.Parameter(w2)
+        self.w3 = nn.Parameter(w3)
+        self.w4 = nn.Parameter(w4)
+        self.w5 = nn.Parameter(w5)
+        self.w6 = nn.Parameter(w6)
+        self.w7 = nn.Parameter(w7)
+        self.w8 = nn.Parameter(w8)
 
     def forward(self, s1, s2):
         # separate forward states and backward states
@@ -57,26 +56,26 @@ class MatchingLayer(nn.Module):
 
         # full matching
         temp = []
-        full_matching_for = self.full_matching(s1_for, s2_for, self.W1)
-        full_matching_back = self.full_matching(s1_back, s2_back, self.W2)
+        full_matching_for = self.full_matching(s1_for, s2_for, self.w1)
+        full_matching_back = self.full_matching(s1_back, s2_back, self.w2)
         temp.append(full_matching_for)
         temp.append(full_matching_back)
         full_matching = torch.cat(temp,2)
-        #print(full_matching.size())
+        # print(full_matching.size())
 
         # max pooling matching
         temp = []
-        maxpooling_matching_for = self.max_pooling_matching(s1_for, s2_for, self.W3)
-        maxpooling_matching_back = self.max_pooling_matching(s1_back, s2_back, self.W4)
+        maxpooling_matching_for = self.max_pooling_matching(s1_for, s2_for, self.w3)
+        maxpooling_matching_back = self.max_pooling_matching(s1_back, s2_back, self.w4)
         temp.append(maxpooling_matching_for)
         temp.append(maxpooling_matching_back)
         maxpooling_matching = torch.cat(temp, 2)
-        #print(maxpooling_matching.size())
+        # print(maxpooling_matching.size())
 
         # mean attentive matching
         temp = []
-        mean_attentive_matching_for = self.mean_attentive_matching(s1_for, s2_for, self.W5, cos_matrix_for)
-        mean_attentive_matching_back = self.mean_attentive_matching(s1_back, s2_back, self.W6, cos_matrix_back)
+        mean_attentive_matching_for = self.mean_attentive_matching(s1_for, s2_for, self.w5, cos_matrix_for)
+        mean_attentive_matching_back = self.mean_attentive_matching(s1_back, s2_back, self.w6, cos_matrix_back)
         temp.append(mean_attentive_matching_for)
         temp.append(mean_attentive_matching_back)
         mean_attentive_matching = torch.cat(temp, 2)
@@ -84,12 +83,12 @@ class MatchingLayer(nn.Module):
 
         # max attentive matching
         temp = []
-        max_attentive_matching_for = self.max_attentive_matching(s1_for, s2_for, self.W7, cos_matrix_for)
-        max_attentive_matching_back = self.mean_attentive_matching(s1_back, s2_back, self.W8, cos_matrix_back)
+        max_attentive_matching_for = self.max_attentive_matching(s1_for, s2_for, self.w7, cos_matrix_for)
+        max_attentive_matching_back = self.mean_attentive_matching(s1_back, s2_back, self.w8, cos_matrix_back)
         temp.append(max_attentive_matching_for)
         temp.append(max_attentive_matching_back)
         max_attentive_matching = torch.cat(temp, 2)
-        #print(max_attentive_matching.size())
+        # print(max_attentive_matching.size())
 
         if type == 'full':
             out = full_matching
@@ -130,7 +129,7 @@ class MatchingLayer(nn.Module):
         # return cosine matrix (n_states1, n_states2, batch_size)
         return self.cos_calc(s1, s2)
 
-    def element_multiply_vector(self, v, W):
+    def element_multiply_vector(self, v, w):
         """
         calculate element_wise multiplication between a state vector(tensor) and weights matrix W
         :param v: [batch_size, embed_dim]
@@ -140,12 +139,12 @@ class MatchingLayer(nn.Module):
         # expand state vector shape to: [batch_size, 1, embed_dim]
         v = v.unsqueeze(1)
         # expand W shape to: [1, perspective, embed_dim]
-        W = W.unsqueeze(0)
+        w = w.unsqueeze(0)
         # return element-wise multiply
-        out = v*W
+        out = v*w
         return out
 
-    def element_multiply_states(self, s, W):
+    def element_multiply_states(self, s, w):
         """
         calculate element_wise multiplication between every state vectors and weights matrix W without for loop
         :param s: [n_state, batch_size, embed_dim]
@@ -155,12 +154,12 @@ class MatchingLayer(nn.Module):
         # concatenate state dimension and batch size dimention: [n_state*batch_size, embed_dim]
         s = s.contiguous().view(-1, self.embed_dim)
         # return vector based element-wise multiplication: [n_state*batch_size, perspective, embed_dim]
-        out = self.element_multiply_vector(s, W)
+        out = self.element_multiply_vector(s, w)
         # reshape to original shape
         out = out.view(-1, self.batch_size, self.perspective, self.embed_dim)
         return out
 
-    def full_matching(self, s1, s2, W):
+    def full_matching(self, s1, s2, w):
         """
         return full matching strategy result
         :param s1: [n_state1, batch_size, embed_dim]
@@ -172,15 +171,15 @@ class MatchingLayer(nn.Module):
         # get s2 forward last step hidden vector: [batch_size, embed_dim]
         s2_last_state = s2[-1, :, :]
         # get weighted s1: [n_state1, batch_size, perspective, embed_size]
-        weighted_s1 = self.element_multiply_states(s1, W)
+        weighted_s1 = self.element_multiply_states(s1, w)
         # get weighted s2 last state: [batch_size, perspective, embed_size]
-        s2 = self.element_multiply_vector(s2_last_state, W)
+        s2 = self.element_multiply_vector(s2_last_state, w)
         #reshape weighted s2 last state to: [1, batch_size, perspective, embed_size]
         weighted_s2 = s2.unsqueeze(0)
         result = self.cos_calc(weighted_s1, weighted_s2)
         return result
 
-    def max_pooling_matching(self, s1, s2, W):
+    def max_pooling_matching(self, s1, s2, w):
         """
         return max pooling matching strategy result
         :param s1: [n_state1, batch_size, embed_dim]
@@ -189,9 +188,9 @@ class MatchingLayer(nn.Module):
         :return: [n_state1, batch_size, perspective]
         """
         # get weighted s1: [n_state1, batch_size, perspective, embed_size]
-        weighted_s1 = self.element_multiply_states(s1, W)
+        weighted_s1 = self.element_multiply_states(s1, w)
         # get weighted s2: [n_state2, batch_size, perspective, embed_size]
-        weighted_s2 = self.element_multiply_states(s2, W)
+        weighted_s2 = self.element_multiply_states(s2, w)
 
         # reshape weighted s1 to [n_state1, 1, batch_size, perspective, embed_size]
         weighted_s1 = weighted_s1.unsqueeze(1)
@@ -219,7 +218,7 @@ class MatchingLayer(nn.Module):
         sum_cos = (cosine_matrix.sum(1) + self.epsilon).unsqueeze(-1)
         return weighted_sum_cos / sum_cos
 
-    def mean_attentive_matching(self, s1, s2, W, cos_matrix):
+    def mean_attentive_matching(self, s1, s2, w, cos_matrix):
         """
         return mean attentive matching stretegy result
         :param s1: [n_state1, batch_size, embed_dim]
@@ -228,14 +227,13 @@ class MatchingLayer(nn.Module):
         :return: [n_state1, batch_size, perspective]
         """
         # get weighted_s1: [n_state1, batch_size, perspective, embed_dim]
-        weighted_s1 = self.element_multiply_states(s1, W)
+        weighted_s1 = self.element_multiply_states(s1, w)
         # get attentive vector for s2: [n_state1, batch_size, embed_dim]
         attentive_vector = self.mean_attentive_vectors(s2, cos_matrix)
         # get weighted s2: [n_state1, batch_size, perspective, embed_dim]
-        weighted_s2 = self.element_multiply_states(attentive_vector, W)
+        weighted_s2 = self.element_multiply_states(attentive_vector, w)
         result = self.cos_calc(weighted_s1, weighted_s2)
         return result
-
 
     def max_attentive_vectors(self, s, cosine_matrix):
         """
@@ -252,7 +250,7 @@ class MatchingLayer(nn.Module):
         result = max_s_vectors.view(-1, self.batch_size, self.embed_dim)
         return result
 
-    def max_attentive_matching(self, s1, s2, W, cos_matrix):
+    def max_attentive_matching(self, s1, s2, w, cos_matrix):
         """
         return max attentive matching strategy result
         :param s1: [n_state1, batch_size, embed_dim]
@@ -260,16 +258,16 @@ class MatchingLayer(nn.Module):
         :param W: [perspective, embed_dim]
         :return: [n_state1, batch_size, perspective]
         """
-        weighted_s1 = self.element_multiply_states(s1, W)
+        weighted_s1 = self.element_multiply_states(s1, w)
         # get attentive vector for s2: [n_state1, batch_size, embed_dim]
         attentive_vector = self.max_attentive_vectors(s2, cos_matrix)
         # get weighted s2: [n_state1, batch_size, perspective, embed_dim]
-        weighted_s2 = self.element_multiply_states(attentive_vector, W)
+        weighted_s2 = self.element_multiply_states(attentive_vector, w)
         result = self.cos_calc(weighted_s1, weighted_s2)
         return result
 
 
-class ContextRepresentation(nn.Module):
+class ContextLayer(nn.Module):
 
     """ Feed a concatenated [WordEmbedding, CharEmbedding] into a BiLSTM layer
 
@@ -283,7 +281,7 @@ class ContextRepresentation(nn.Module):
 
     """
     def __init__(self, input_size, hidden_size=100,  num_layers = 1, dropout=0.1):
-        super(ContextRepresentation, self).__init__()
+        super(ContextLayer, self).__init__()
         self.rnn = nn.LSTM(input_size, hidden_size, num_layers, bias=False, dropout=dropout, bidirectional = True)
 
     def forward(self, x):
@@ -335,9 +333,9 @@ if __name__ == '__main__':
     s1 = Variable(s1)
     s2 = Variable(s2)
 
-    context = ContextRepresentation(input_size = 350, hidden_size=100)
+    context = ContextLayer(input_size = 350, hidden_size=100)
     matching = MatchingLayer(batch_size = 5, embed_dim=100, epsilon=1e-6, perspective=50, type = 'all')
-    aggregation = ContextRepresentation(input_size = 8*perspective, hidden_size=100,  dropout=0.1)
+    aggregation = ContextLayer(input_size = 8*perspective, hidden_size=100,  dropout=0.1)
     pre = PredictionLayer(input_size=4*hidden_size, hidden_size=100, output_size=3, dropout=0.1)
 
     out1, _ = context(s1)
