@@ -17,6 +17,36 @@ import argparse
 from sklearn.manifold import TSNE
 import random
 
+def loadData_sample(vocab, num_samples, args):
+
+    keys = list(vocab.keys())
+    data = []
+    count = 0
+
+    start = time.time()
+    print('loading training data... \n')
+    with open(args.source+args.file_trn, 'r') as file_list:
+
+        for file in file_list:
+            if count < num_samples:
+                line = file.strip().split('\t')
+                label = line[0]
+                s1 = line[1].strip(' ').split(' ')
+                s2 = line[2].split(' ')
+
+                count += 1
+
+                data.append((label, s1, s2))
+
+            if count%10000 == 0:
+                print("processed %s docs"%count)
+                print("%s seconds elapsed"%(time.time()-start))
+
+    file_list.close()
+
+    print('...training data loaded, total %s samples \n' % len(data))
+    return data
+
 def loadData(vocab, args):
 
     keys = list(vocab.keys())
@@ -28,15 +58,14 @@ def loadData(vocab, args):
     with open(args.source+args.file_trn, 'r') as file_list:
 
         for file in file_list:
-            if count < 10:
-                line = file.strip().split('\t')
-                label = line[0]
-                s1 = line[1].strip(' ').split(' ')
-                s2 = line[2].split(' ')
+            line = file.strip().split('\t')
+            label = line[0]
+            s1 = line[1].strip(' ').split(' ')
+            s2 = line[2].split(' ')
 
-                count += 1
+            count += 1
 
-                data.append((label, s1, s2))
+            data.append((label, s1, s2))
 
             if count%10000 == 0:
                 print("processed %s docs"%count)
@@ -149,6 +178,7 @@ class Batch():
         ### create character tensor
         s1_char_mat = Variable(self.create_batch_chars(all_txt[1], s1, vocab_char, max_length_s1).type(torch.LongTensor))
         s2_char_mat = Variable(self.create_batch_chars(all_txt[2], s2, vocab_char, max_length_s2).type(torch.LongTensor))
+        labels = labels.squeeze(1)
         return labels, s1, s2, s1_char_mat, s2_char_mat
 
 
@@ -166,6 +196,8 @@ class BiLSTM(nn.Module):
         self.hid_size = args.hid
         self.batch_size = args.batch
         self.num_layers = args.num_layers
+        self.num_classes = args.num_classes
+        self.dropout = args.dropout
         self.sent_length = 0
         self.word_length = 0
 
@@ -180,11 +212,12 @@ class BiLSTM(nn.Module):
         self.char_representation = nn.LSTM(self.char_embed_size, self.char_size, self.num_layers, bias = False, bidirectional=False)
 
         ### lstm layer
-        self.lstm_s1 = nn.LSTM(self.embed_size+self.char_size, self.hid_size, self.num_layers, bias = False, bidirectional=False)
-        self.lstm_s2 = nn.LSTM(self.embed_size+self.char_size, self.hid_size, self.num_layers, bias = False, bidirectional=False)
+        self.lstm_s1 = nn.LSTM(self.embed_size+self.char_size, self.hid_size, self.num_layers, bias = False, bidirectional=True)
+        self.lstm_s2 = nn.LSTM(self.embed_size+self.char_size, self.hid_size, self.num_layers, bias = False, bidirectional=True)
 
-        self.s1_hid = self.init_hidden()
-        self.s2_hid = self.init_hidden()
+        # self.s1_hid = self.init_hidden()
+        # self.s2_hid = self.init_hidden()
+        self.pre = PredictionLayer(4*self.hid_size, self.hid_size, self.num_classes, self.dropout)
 
     def init_hidden(self):
         # Before we've done anything, we dont have any hidden state.
@@ -209,7 +242,7 @@ class BiLSTM(nn.Module):
         # s1
         self.word_length = ch1.size()[1]
         self.sent_length = ch1.size()[2]
-        
+
         all_char1 = []
         for ch in range(ch1.size()[0]):
             ch_emb = self.emb_char(ch1[ch,:,:].squeeze(0))
@@ -232,11 +265,21 @@ class BiLSTM(nn.Module):
         all_char2 = torch.cat(all_char2,1)
         
         ### Context Layer
-        s1_out, self.s1_hid = self.lstm_s1(torch.cat([s1_emb, all_char1], 2), self.s1_hid)
-        s2_out, self.s2_hid = self.lstm_s2(torch.cat([s2_emb, all_char2], 2), self.s2_hid)
 
-        loss = 0
-        return loss.mean()
+        s1_out, self.s1_hid = self.lstm_s1(torch.cat([s1_emb, all_char1], 2)) #, self.s1_hid)
+        s2_out, self.s2_hid = self.lstm_s2(torch.cat([s2_emb, all_char2], 2)) #, self.s2_hid)
+
+        ### Prediction Layer
+        pre_list = []
+        pre_list.append(s1_out[-1,:,:self.hid_size]) # the last vector in forward
+        pre_list.append(s1_out[0,:,self.hid_size:]) # the last vector in backward
+        pre_list.append(s2_out[-1,:,:self.hid_size])
+        pre_list.append(s2_out[0,:,self.hid_size:])
+        out = torch.cat(pre_list,-1)
+        print(out.size)
+        out = self.pre(out)
+
+        return out
 
 
 def all_vocab_emb(args):
@@ -299,6 +342,38 @@ def all_vocab_emb(args):
 
     return vcb_all, all_emb, vcb_all_char
         
+class PredictionLayer(nn.Module):
+
+    """ Feed a fixed-length matching vector to probability distribution
+    We employ a two layer feed-forward neural network to consume the fixed-length matching vector,
+    and apply the softmax function in the output layer.
+
+    Attributes:
+        input_size: 4*hidden_size(4*100)
+        hidden_size: default 100
+        output_size: num of classes, default 3 in our SNLI task
+        dropout: default 0.1
+
+    Dimensions:
+        Input: batch_size * sequence_length * (4* hidden_size)(4*100)
+        output: batch_size * sequence_length * num_classes
+    """
+
+    def __init__(self, input_size, hidden_size=100, output_size=3, dropout=0.1):
+        super(PredictionLayer, self).__init__()
+        self.linear1 = nn.Linear(input_size, hidden_size)
+        self.linear2 = nn.Linear(hidden_size, output_size)
+        self.dropout = nn.Dropout(p=dropout)
+        self.softmax = nn.Softmax()
+
+    def forward(self, x):
+        out = self.linear1(x)
+        out = self.linear2(out)
+        #out = self.dropout(out)
+        #out = self.softmax(out)
+        #_, predicted = torch.max(out.data, 1)
+        return out
+
 
 def main(args):
     vocab, emb, vocab_chars = all_vocab_emb(args)
@@ -319,6 +394,7 @@ def main(args):
         model.cuda()
 
     optimizer = optim.Adagrad(model.parameters(), lr=args.lr)
+    criterion = nn.CrossEntropyLoss()
     losses = []
     
     print("start training model...\n")
@@ -337,13 +413,15 @@ def main(args):
                 print("training epoch %s: completed %s %%"  % (str(epoch), str(round(100*batch.start/len(data), 2))))
 
             model.zero_grad()
-            loss = model(labels, s1, s2, ch1, ch2)
-'''
+            out= model(labels, s1, s2, ch1, ch2)
+            labels = labels.squeeze(1)
+            loss = criterion(out, labels)
+
             loss.backward()
             optimizer.step()
 
-            total_loss+=loss.data.cpu().numpy()[0]
-
+            #total_loss+=loss.data.cpu().numpy()[0]
+    '''
         ave_loss = total_loss/n_batch
         print("average loss is: %s" % str(ave_loss))
         losses.append(ave_loss)
@@ -360,6 +438,8 @@ if __name__ == '__main__':
     parser.add_argument('-epochs', type=int, default=1)
     parser.add_argument('-seed', type=int, default=123)
     parser.add_argument('-lr', type=float, default =0.05)
+    parser.add_argument('-num_classes', type=int, default=3)
+    parser.add_argument('-dropout', type=float, default=0.1)
 
     parser.add_argument('-vocab_trn', type=str)
     parser.add_argument('-vocab_dev', type=str)
