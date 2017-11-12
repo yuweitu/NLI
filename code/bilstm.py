@@ -500,8 +500,8 @@ if __name__ == '__main__':
     parser.add_argument('-emb', type=int, default=300)
     parser.add_argument('-hid', type=int, default=100)
     parser.add_argument('-num_layers', type=int, default=1)
-    parser.add_argument('-batch', type=int, default=50)
-    parser.add_argument('-epochs', type=int, default=1)
+    parser.add_argument('-batch', type=int, default=500)
+    parser.add_argument('-epochs', type=int, default=10)
     parser.add_argument('-seed', type=int, default=123)
     parser.add_argument('-lr', type=float, default =0.05)
     parser.add_argument('-num_classes', type=int, default=3)
@@ -548,6 +548,6 @@ if __name__ == '__main__':
 
     args.emb_file = "snli.npy"
     
-    args.cuda = False
+    args.cuda = True
     
     main(args)
