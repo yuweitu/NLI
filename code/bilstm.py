@@ -17,63 +17,86 @@ import argparse
 from sklearn.manifold import TSNE
 import random
 
-def loadData_sample(vocab, num_samples, args):
+
+def loadData_sample(vocab, num_samples, args, mode = 'train'):
 
     keys = list(vocab.keys())
     data = []
     count = 0
 
     start = time.time()
-    print('loading training data... \n')
-    with open(args.source+args.file_trn, 'r') as file_list:
+    print('loading data... \n')
+
+    if mode == 'train':
+        filename = args.file_trn
+    elif mode == 'eval':
+        filename = args.file_dev
+    elif mode == 'test':
+        filename = args.file_tst
+
+    with open(args.source+filename, 'r') as file_list:
 
         for file in file_list:
             if count < num_samples:
                 line = file.strip().split('\t')
+
+                if len(line) < 3:
+                    continue
+
                 label = line[0]
                 s1 = line[1].strip(' ').split(' ')
-                s2 = line[2].split(' ')
-
-                count += 1
+                s2 = line[2].strip(' ').split(' ')
 
                 data.append((label, s1, s2))
+                count += 1
 
-            if count%10000 == 0:
-                print("processed %s docs"%count)
-                print("%s seconds elapsed"%(time.time()-start))
+                if count%10000 == 0:
+                    print("processed %s docs"%count)
+                    print("%s seconds elapsed"%(time.time()-start))
 
     file_list.close()
 
-    print('...training data loaded, total %s samples \n' % len(data))
+    print('... %s data loaded, total %s samples \n' % (mode, len(data)))
     return data
 
-def loadData(vocab, args):
+
+def loadData(vocab, args, mode = 'train'):
 
     keys = list(vocab.keys())
     data = []
     count = 0
 
     start = time.time()
-    print('loading training data... \n')
-    with open(args.source+args.file_trn, 'r') as file_list:
+    print('loading data... \n')
+
+    if mode == 'train':
+        filename = args.file_trn
+    elif mode == 'eval':
+        filename = args.file_dev
+    elif mode == 'test':
+        filename = args.file_tst
+
+    with open(args.source+filename, 'r') as file_list:
 
         for file in file_list:
             line = file.strip().split('\t')
+
+            if len(line) < 3:
+                continue
+
             label = line[0]
             s1 = line[1].strip(' ').split(' ')
-            s2 = line[2].split(' ')
-
-            count += 1
+            s2 = line[2].strip(' ').split(' ')
 
             data.append((label, s1, s2))
-
+            count += 1
             if count%10000 == 0:
                 print("processed %s docs"%count)
                 print("%s seconds elapsed"%(time.time()-start))
 
     file_list.close()
 
-    print('...training data loaded, total %s samples \n' % len(data))
+    print('... %s data loaded, total %s samples \n' % (mode, len(data)))
     return data
 
 
@@ -276,7 +299,7 @@ class BiLSTM(nn.Module):
         pre_list.append(s2_out[-1,:,:self.hid_size])
         pre_list.append(s2_out[0,:,self.hid_size:])
         out = torch.cat(pre_list,-1)
-        print(out.size)
+
         out = self.pre(out)
 
         return out
@@ -369,10 +392,36 @@ class PredictionLayer(nn.Module):
     def forward(self, x):
         out = self.linear1(x)
         out = self.linear2(out)
-        #out = self.dropout(out)
-        #out = self.softmax(out)
-        #_, predicted = torch.max(out.data, 1)
+        out = self.dropout(out)
+        out = self.softmax(out)
+        _, predicted = torch.max(out.data, 1)
         return out
+
+def test_model(model, batch):
+    """
+    Help function that tests the model's performance on a dataset
+    @param: loader - data loader for the dataset to test against
+    """
+    correct = 0
+    total = 0
+
+    model.eval()
+
+    for labels, s1, s2, ch1, ch2 in batch:
+            
+        if args.cuda:
+            labels, s1, s2, ch1, ch2 = labels.cuda(), s1.cuda(), s2.cuda(), ch1.cuda(), ch2.cuda()
+
+        outputs = model(labels, s1, s2, ch1, ch2)
+
+        predicted = (outputs.data.max(1)[1]).long().view(-1)
+
+        total += labels.size(0)
+
+        correct += (predicted == labels.data).sum()
+    model.train()
+
+    return (100 * correct / total)
 
 
 def main(args):
@@ -380,8 +429,8 @@ def main(args):
     
     batch_size = args.batch
  
+    #data = loadData(vocab, args)
     data = loadData(vocab, args)
-
     random.shuffle(data)
     
     n_batch = int(np.ceil(len(data)/batch_size))
@@ -396,7 +445,8 @@ def main(args):
     optimizer = optim.Adagrad(model.parameters(), lr=args.lr)
     criterion = nn.CrossEntropyLoss()
     losses = []
-    
+    eval_acc_hist = []
+
     print("start training model...\n")
     start_time = time.time()
     count = 0
@@ -409,32 +459,48 @@ def main(args):
             if args.cuda:
                 labels, s1, s2, ch1, ch2 = labels.cuda(), s1.cuda(), s2.cuda(), ch1.cuda(), ch2.cuda()
 
-            if batch.start % 1000 == 0:
+            if batch.start % 10000 == 0:
                 print("training epoch %s: completed %s %%"  % (str(epoch), str(round(100*batch.start/len(data), 2))))
 
             model.zero_grad()
             out= model(labels, s1, s2, ch1, ch2)
-            labels = labels.squeeze(1)
+
             loss = criterion(out, labels)
 
             loss.backward()
             optimizer.step()
 
-            #total_loss+=loss.data.cpu().numpy()[0]
-    '''
+            total_loss+=loss.data.cpu().numpy()[0]
+
         ave_loss = total_loss/n_batch
-        print("average loss is: %s" % str(ave_loss))
+        print("average trainning loss is: %s" % str(ave_loss))
         losses.append(ave_loss)
+
+        ### evaluate the model after each epoch
+        eval_data = loadData(vocab, args, mode = 'eval')
+        eval_batch = Batch(eval_data, batch_size, vocab, vocab_chars)
+        eval_acc = test_model(model, eval_batch)
+        eval_acc_hist.append(eval_acc)
+        
         end_time = time.time()
         print("%s seconds elapsed" % str(end_time - start_time))
-    '''
+
+    print("training loss history: ")
+    print(losses)
+    print("evaluation accuracy history: ")
+    print(eval_acc_hist)
+    test_data = loadData(vocab, args, mode = 'test')
+    test_batch = Batch(test_data, batch_size, vocab, vocab_chars)
+    test_acc = test_model(model, test_batch)
+    print("testing accuracy is: %s %%" % test_acc)
+
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
     parser.add_argument('-emb', type=int, default=300)
     parser.add_argument('-hid', type=int, default=100)
     parser.add_argument('-num_layers', type=int, default=1)
-    parser.add_argument('-batch', type=int, default=5)
+    parser.add_argument('-batch', type=int, default=50)
     parser.add_argument('-epochs', type=int, default=1)
     parser.add_argument('-seed', type=int, default=123)
     parser.add_argument('-lr', type=float, default =0.05)
