@@ -344,7 +344,7 @@ def all_vocab_emb(args):
     
     # stack vocab_trn, vocab_dev and vocab_tst
     for i in vcb_dev.keys():
-        if i not in vcb_trn.keys():
+        if i not in vcb_all.keys():
             vcb_all[i] = count
             count += 1
 
@@ -357,7 +357,7 @@ def all_vocab_emb(args):
     vcb_size = len(vcb_all)
 
     # initialize random embedding
-    all_emb = np.random.normal(0, 1, (len(vcb_all), args.emb))
+    all_emb = np.random.normal(0, 1, (len(vcb_all)+1, args.emb))
     
     trn_keys = list(vcb_trn.keys())
     count = 0
@@ -366,7 +366,7 @@ def all_vocab_emb(args):
     for r in range(len(trn_keys)):
         k = trn_keys[r]
         if type(emb[k]) != int:
-            all_emb[r, :] = list(map(float, emb[k]))
+            all_emb[r+1, :] = list(map(float, emb[k]))
             count += 1
 
     # stack character vocabulary
@@ -569,6 +569,6 @@ if __name__ == '__main__':
 
     args.emb_file = "snli.npy"
     
-    args.cuda = False
+    args.cuda = True
     
     main(args)
