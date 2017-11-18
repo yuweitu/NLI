@@ -417,7 +417,7 @@ class PredictionLayer(nn.Module):
         _, predicted = torch.max(out.data, 1)
         return out
 
-def test_model(model, batch):
+def test_model(model, batch, args):
     """
     Help function that tests the model's performance on a dataset
     @param: loader - data loader for the dataset to test against
@@ -499,7 +499,7 @@ def main(args):
         ### evaluate the model after each epoch
         eval_data = loadData(vocab, args, mode = 'eval')
         eval_batch = Batch(eval_data, batch_size, vocab, vocab_chars)
-        eval_acc = test_model(model, eval_batch)
+        eval_acc = test_model(model, eval_batch, args)
         eval_acc_hist.append(eval_acc)
         print("completed epoch %s, evaluation loss is: %s %%" % (epoch, round(100*eval_acc, 2)))
         
@@ -512,7 +512,7 @@ def main(args):
     print(eval_acc_hist)
     test_data = loadData(vocab, args, mode = 'test')
     test_batch = Batch(test_data, batch_size, vocab, vocab_chars)
-    test_acc = test_model(model, test_batch)
+    test_acc = test_model(model, test_batch, args)
     print("testing accuracy is: %s %%" % test_acc)
     
 if __name__ == '__main__':
