@@ -10,12 +10,12 @@ from torch.autograd import Variable
 
 class MatchingLayer(nn.Module):
 
-    def __init__(self, batch_size = 5, embed_dim = 100, epsilon=1e-6, perspective=50, type = 'all'):
+    def __init__(self, embed_dim = 100, epsilon=1e-6, perspective=10, type = 'all'):
         super(MatchingLayer , self).__init__()
         self.epsilon = epsilon
         self.embed_dim = embed_dim
         self.perspective = perspective
-        self.batch_size = batch_size
+        #self.batch_size = batch_size
 
         w1 = torch.Tensor(perspective, embed_dim)
         w2 = torch.Tensor(perspective, embed_dim)
@@ -152,11 +152,16 @@ class MatchingLayer(nn.Module):
         :return: [n_state, batch_size, perspective, embed_dim]
         """
         # concatenate state dimension and batch size dimention: [n_state*batch_size, embed_dim]
+        batch_size = s.size()[1]
         s = s.contiguous().view(-1, self.embed_dim)
-        # return vector based element-wise multiplication: [n_state*batch_size, perspective, embed_dim]
-        out = self.element_multiply_vector(s, w)
+        # reshape to (n_state*batch_size, 1, embedding_size)
+        s = torch.unsqueeze(s, 1)
+        # reshape weights to (1, perspective, embed_size)
+        w = torch.unsqueeze(w, 0)
+        # element-wise multiply
+        out = s * w
         # reshape to original shape
-        out = out.view(-1, self.batch_size, self.perspective, self.embed_dim)
+        out = out.view(-1, batch_size, self.perspective, self.embed_dim)
         return out
 
     def full_matching(self, s1, s2, w):
@@ -242,12 +247,13 @@ class MatchingLayer(nn.Module):
         :param cosine_matrix: [n_state1, n_state2, batch_size]
         :return: [n_state1, batch_size, embed_size]
         """
+        batch_size = s.size()[1]
         _, max_s = cosine_matrix.max(1)
         # concatenate max_x to [n_state1*batch_size]
         max_s = max_s.contiguous().view(-1)
         s = s.contiguous().view(-1, self.embed_dim)
         max_s_vectors = s[max_s]
-        result = max_s_vectors.view(-1, self.batch_size, self.embed_dim)
+        result = max_s_vectors.view(-1, batch_size, self.embed_dim)
         return result
 
     def max_attentive_matching(self, s1, s2, w, cos_matrix):
