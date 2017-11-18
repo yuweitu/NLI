@@ -340,7 +340,7 @@ if __name__ == '__main__':
     s2 = Variable(s2)
 
     context = ContextLayer(input_size = 350, hidden_size=100)
-    matching = MatchingLayer(batch_size = 5, embed_dim=100, epsilon=1e-6, perspective=50, type = 'all')
+    matching = MatchingLayer(embed_dim=100, epsilon=1e-6, perspective=50, type = 'all')
     aggregation = ContextLayer(input_size = 8*perspective, hidden_size=100,  dropout=0.1)
     pre = PredictionLayer(input_size=4*hidden_size, hidden_size=100, output_size=3, dropout=0.1)
 
