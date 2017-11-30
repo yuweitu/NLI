@@ -17,9 +17,9 @@ import argparse
 from sklearn.manifold import TSNE
 import random
 
-from bilstm import Batch
-from bilstm import loadData,loadData_sample, all_vocab_emb
-from MultiPerspective_Matching import MatchingLayer, ContextLayer, PredictionLayer
+from .bilstm import Batch
+from .bilstm import loadData,loadData_sample, all_vocab_emb
+from .MultiPerspective_Matching import MatchingLayer, ContextLayer, PredictionLayer
 
 
 class BiLSTM(nn.Module):

@@ -237,8 +237,9 @@ class BiLSTM(nn.Module):
         self.char_hid = self.init_hidden_chars()
 
         ### lstm layer
-        self.lstm_s1 = nn.LSTM(self.embed_size+self.char_size, self.hid_size, self.num_layers, bias = False, bidirectional=True)
-        self.lstm_s2 = nn.LSTM(self.embed_size+self.char_size, self.hid_size, self.num_layers, bias = False, bidirectional=True)
+        self.context = nn.LSTM(self.embed_size+self.char_size, self.hid_size, self.num_layers, bias = False, bidirectional=True)
+        #self.lstm_s1 = nn.LSTM(self.embed_size+self.char_size, self.hid_size, self.num_layers, bias = False, bidirectional=True)
+        #self.lstm_s2 = nn.LSTM(self.embed_size+self.char_size, self.hid_size, self.num_layers, bias = False, bidirectional=True)
 
         self.s1_hid = self.init_hidden(self.batch_size)
         self.s2_hid = self.init_hidden(self.batch_size)
@@ -251,19 +252,19 @@ class BiLSTM(nn.Module):
         # why they have this dimensionality.
         # The axes semantics are (num_layers, minibatch_size, hidden_dim)
         if self.use_cuda:
-            return (Variable(torch.zeros(self.num_layers*2, batch_size, self.hid_size)).cuda(),
-                    Variable(torch.zeros(self.num_layers*2, batch_size, self.hid_size)).cuda())
+            return (Variable(torch.randn(self.num_layers*2, batch_size, self.hid_size)).cuda(),
+                    Variable(torch.randn(self.num_layers*2, batch_size, self.hid_size)).cuda())
         else:
-            return (Variable(torch.zeros(self.num_layers*2, batch_size, self.hid_size)),
-                    Variable(torch.zeros(self.num_layers*2, batch_size, self.hid_size)))
+            return (Variable(torch.randn(self.num_layers*2, batch_size, self.hid_size)),
+                    Variable(torch.randn(self.num_layers*2, batch_size, self.hid_size)))
     
     def init_hidden_chars(self):
         if self.use_cuda:
-            return (Variable(torch.zeros(self.num_layers, self.sent_length, self.char_size)).cuda(),
-                    Variable(torch.zeros(self.num_layers, self.sent_length, self.char_size)).cuda())
+            return (Variable(torch.randn(self.num_layers, self.sent_length, self.char_size)).cuda(),
+                    Variable(torch.randn(self.num_layers, self.sent_length, self.char_size)).cuda())
         else:
-            return (Variable(torch.zeros(self.num_layers, self.sent_length, self.char_size)),
-                    Variable(torch.zeros(self.num_layers, self.sent_length, self.char_size)))
+            return (Variable(torch.randn(self.num_layers, self.sent_length, self.char_size)),
+                    Variable(torch.randn(self.num_layers, self.sent_length, self.char_size)))
 
 
     def forward(self, labels, s1, s2, ch1, ch2):
@@ -307,10 +308,12 @@ class BiLSTM(nn.Module):
         
         ### Context Layer
         
-        self.s1_hid = self.init_hidden(batch_size)
-        self.s2_hid = self.init_hidden(batch_size)
-        s1_out, _ = self.lstm_s1(torch.cat([s1_emb, all_char1], 2), self.s1_hid)
-        s2_out, _ = self.lstm_s2(torch.cat([s2_emb, all_char2], 2), self.s2_hid)
+        #self.s1_hid = self.init_hidden(batch_size)
+        #self.s2_hid = self.init_hidden(batch_size)
+        s1_out, _ = self.context(torch.cat([s1_emb, all_char1], 2))
+        s2_out, _ = self.context(torch.cat([s2_emb, all_char2], 2))
+        #s1_out, _ = self.lstm_s1(torch.cat([s1_emb, all_char1], 2), self.s1_hid)
+        #s2_out, _ = self.lstm_s2(torch.cat([s2_emb, all_char2], 2), self.s2_hid)
 
         ### Prediction Layer
         pre_list = []
@@ -449,8 +452,8 @@ def main(args):
     
     batch_size = args.batch
  
-    data = loadData(vocab, args)
-    #data = loadData_sample(vocab,10000, args)
+    #data = loadData(vocab, args)
+    data = loadData_sample(vocab,1000, args)
     random.shuffle(data)
     
     n_batch = int(np.ceil(len(data)/batch_size))
@@ -462,7 +465,8 @@ def main(args):
     if args.cuda:
         model.cuda()
 
-    optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr)
+    optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr)
+    para = filter(lambda p: p.requires_grad, model.parameters())
     criterion = nn.CrossEntropyLoss()
     losses = []
     eval_acc_hist = []
@@ -479,7 +483,7 @@ def main(args):
             if args.cuda:
                 labels, s1, s2, ch1, ch2 = labels.cuda(), s1.cuda(), s2.cuda(), ch1.cuda(), ch2.cuda()
 
-            if batch.start % 10000 == 0:
+            if batch.start % 50000 == 0:
                 print("training epoch %s: completed %s %%"  % (str(epoch), str(round(100*batch.start/len(data), 2))))
 
             model.zero_grad()
@@ -489,6 +493,12 @@ def main(args):
 
             loss.backward()
             optimizer.step()
+            for parameter in para:
+                print(parameter)
+                if parameter.grad is not None:
+                    print(parameter.grad.size())
+                else:
+                    print(None)
 
             total_loss+=loss.data.cpu().numpy()[0]
 
@@ -501,7 +511,7 @@ def main(args):
         eval_batch = Batch(eval_data, batch_size, vocab, vocab_chars)
         eval_acc = test_model(model, eval_batch, args)
         eval_acc_hist.append(eval_acc)
-        print("completed epoch %s, evaluation loss is: %s %%" % (epoch, round(100*eval_acc, 2)))
+        print("completed epoch %s, evaluation loss is: %s %%" % (epoch, round(eval_acc, 2)))
         
         end_time = time.time()
         print("%s seconds elapsed" % str(end_time - start_time))
@@ -524,7 +534,7 @@ if __name__ == '__main__':
     parser.add_argument('-batch', type=int, default=800)
     parser.add_argument('-epochs', type=int, default=10)
     parser.add_argument('-seed', type=int, default=123)
-    parser.add_argument('-lr', type=float, default =1)
+    parser.add_argument('-lr', type=float, default =0.0001)
     parser.add_argument('-num_classes', type=int, default=3)
     parser.add_argument('-dropout', type=float, default=0.1)
 
@@ -569,6 +579,6 @@ if __name__ == '__main__':
 
     args.emb_file = "snli.npy"
     
-    args.cuda = True
+    args.cuda = False
     
     main(args)

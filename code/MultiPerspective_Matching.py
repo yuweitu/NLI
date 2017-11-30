@@ -286,9 +286,12 @@ class ContextLayer(nn.Module):
         Output: batch_size * sequence_length * (2 * hidden_size)
 
     """
-    def __init__(self, input_size, hidden_size=100,  num_layers = 1, dropout=0.1):
+    def __init__(self, input_size, hidden_size=100,  num_layers = 1, dropout= 0.1, rnn_unit = 'lstm'):
         super(ContextLayer, self).__init__()
-        self.rnn = nn.LSTM(input_size, hidden_size, num_layers, bias=False, dropout=dropout, bidirectional = True)
+        if rnn_unit == 'lstm':
+            self.rnn = nn.LSTM(input_size, hidden_size, num_layers, bias=False, dropout=dropout, bidirectional = True)
+        if rnn_unit == 'gru':
+            self.rnn = nn.GRU(input_size, hidden_size, num_layers, bias=False, dropout=dropout, bidirectional=True)
 
     def forward(self, x):
         out = self.rnn(x)
